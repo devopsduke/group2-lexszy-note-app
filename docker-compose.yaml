@@ -3,7 +3,7 @@ version: "3.9"
 services:
   app:
     build: .
-    image: group2lexszyapp/notes-app:v1
+    image: group2lexszyapp/grp2-notes-app:v1
     ports:
       - "3000:3000"
     environment:
