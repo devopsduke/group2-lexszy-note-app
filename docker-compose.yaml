@@ -1,5 +1,3 @@
-version: "3.9"
- 
 services:
   app:
     build: .
@@ -13,7 +11,8 @@ services:
       DB_PASSWORD: apppassword
       DB_NAME: notesdb
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     restart: unless-stopped
  
   db:
@@ -24,6 +23,10 @@ services:
       POSTGRES_DB: notesdb
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck: 
+      test: ["CMD-SHELL", "pg_isready -U appuser -d notesdb"]
+      interval: 5s
+      retries: 10
     restart: unless-stopped
  
 volumes:
