@@ -1,0 +1,103 @@
+#cloud-config
+package_update: true
+packages:
+  - docker.io
+  - docker-compose
+  - postgresql-client
+  - curl
+  - tar
+
+write_files:
+  # 1. The docker-compose file for the app
+  - path: /opt/lexsy/docker-compose.yml
+    permissions: '0644'
+    content: |
+      services:
+        app:
+          image: ${dockerhub_image}
+          restart: unless-stopped
+          ports:
+            - "80:3000"
+          environment:
+            DB_HOST: db
+            DB_PORT: "5432"
+            DB_USER: appuser
+            DB_PASSWORD: ${db_password}
+            DB_NAME: notesdb
+          depends_on:
+            db:
+              condition: service_healthy
+
+        db:
+          image: postgres:16-alpine
+          restart: unless-stopped
+          environment:
+            POSTGRES_USER: appuser
+            POSTGRES_PASSWORD: ${db_password}
+            POSTGRES_DB: notesdb
+          volumes:
+            - db_data:/var/lib/postgresql/data
+          healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U appuser -d notesdb"]
+            interval: 5s
+            retries: 10
+
+      volumes:
+        db_data:
+
+  # 2. The backup script
+  - path: /opt/lexsy/backup.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+      DUMP="/tmp/notes-$STAMP.sql.gz"
+      cd /opt/lexsy
+      
+      # Dump the database
+      docker-compose exec -T db pg_dump -U appuser -d notesdb | gzip > "$DUMP"
+      
+      # Upload to Azure Storage (uses the VM's managed identity)
+      /usr/local/bin/azcopy copy "$DUMP" "https://stlexszygroup2backup.blob.core.windows.net/db-backups/notes-$STAMP.sql.gz" --auth-mode=login
+      
+      rm -f "$DUMP"
+
+  # 3. The Systemd Timer for the backup
+  - path: /etc/systemd/system/lexsy-backup.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Lexsy DB Backup
+      [Service]
+      Type=oneshot
+      User=grp2user
+      ExecStart=/opt/lexsy/backup.sh
+
+  - path: /etc/systemd/system/lexsy-backup.timer
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Run Lexsy DB Backup nightly
+      [Timer]
+      OnCalendar=*-*-* 02:00:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  # Install Docker and allow grp2user to run it
+  - systemctl enable --now docker
+  - usermod -aG docker grp2user
+  
+  # Install azcopy manually
+  - curl -sL https://aka.ms/downloadazcopy-v10-linux -o /tmp/azcopy.tar.gz
+  - tar -xzf /tmp/azcopy.tar.gz -C /tmp
+  - cp /tmp/azcopy_linux_amd64_*/azcopy /usr/local/bin/azcopy
+  - chmod +x /usr/local/bin/azcopy
+  
+  # Start the app
+  - cd /opt/lexsy && sudo docker-compose up -d
+  
+  # Start the backup timer
+  - systemctl daemon-reload
+  - systemctl enable --now lexsy-backup.timer
