@@ -1,7 +1,8 @@
 name: build-and-deploy
 
 on:
-   workflow_dispatch: # This allows manual triggering only
+    push:
+      branches: [ main ]
 
 jobs:
   build-and-push:
