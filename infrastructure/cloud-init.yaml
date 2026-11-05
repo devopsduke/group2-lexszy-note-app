@@ -22,7 +22,7 @@ write_files:
             DB_HOST: db
             DB_PORT: "5432"
             DB_USER: appuser
-            DB_PASSWORD: ${db_password}
+            DB_PASSWORD: '${db_password}'
             DB_NAME: notesdb
           depends_on:
             db:
@@ -33,7 +33,7 @@ write_files:
           restart: unless-stopped
           environment:
             POSTGRES_USER: appuser
-            POSTGRES_PASSWORD: ${db_password}
+            POSTGRES_PASSWORD: '${db_password}'
             POSTGRES_DB: notesdb
           volumes:
             - db_data:/var/lib/postgresql/data
@@ -96,7 +96,7 @@ runcmd:
   - chmod +x /usr/local/bin/azcopy
   
   # Start the app
-  - cd /opt/lexsy && sudo docker-compose up -d
+  - cd /opt/lexsy && sudo docker compose up -d
   
   # Start the backup timer
   - systemctl daemon-reload
