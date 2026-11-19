@@ -50,15 +50,18 @@ write_files:
     permissions: '0755'
     content: |
       #!/bin/bash
+      # Tell AzCopy to use the VM's Managed Identity for authentication
+      export AZCOPY_AUTO_LOGIN_TYPE=MSI
+
       STAMP=$(date -u +%Y%m%dT%H%M%SZ)
       DUMP="/tmp/notes-$STAMP.sql.gz"
       cd /opt/lexsy
       
       # Dump the database
-      docker-compose exec -T db pg_dump -U appuser -d notesdb | gzip > "$DUMP"
+      docker compose exec -T db pg_dump -U appuser -d notesdb | gzip > "$DUMP"
       
       # Upload to Azure Storage (uses the VM's managed identity)
-      /usr/local/bin/azcopy copy "$DUMP" "https://stlexszygroup2backup.blob.core.windows.net/db-backups/notes-$STAMP.sql.gz" --auth-mode=login
+      /usr/local/bin/azcopy copy "$DUMP" "https://stlexszygroup2backup.blob.core.windows.net/db-backups/notes-$STAMP.sql.gz"
       
       rm -f "$DUMP"
 
